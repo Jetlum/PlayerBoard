@@ -32,9 +32,4 @@ docker compose up -d postgres nats
 ./scripts/dev-restart.sh        # builds + starts api (:8080) and worker
 ```
 Then open `http://localhost:8080/` (PlayerBoard) and `http://localhost:8080/club.html` (ClubBoard).
-Full details, env vars, and the "after you change code" workflow are in **README-run.md**.
-
-## Sources
-- ScoreBoard: https://scoretech.ai/scoreboard
-- ScoreAlerts: https://scorealerts.scoretech.ai
-- Score Technologies GmbH (Grünwald, DE): https://de.linkedin.com/company/score-technologies-gmbh
+Full details, env vars, and the "after you change code" workflow are in **README-run.md**
