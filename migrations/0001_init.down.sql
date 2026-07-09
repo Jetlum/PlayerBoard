@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS audit_log;
+DROP TABLE IF EXISTS outbox;
+DROP TABLE IF EXISTS inbound_event;
+DROP TABLE IF EXISTS payout_event;
+DROP TABLE IF EXISTS milestone;
+DROP TABLE IF EXISTS performance_stat;
+DROP TABLE IF EXISTS clause;
+DROP TABLE IF EXISTS contract;
+DROP TABLE IF EXISTS athlete;

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PlayerBoard — Dev Dashboard</title>
+<style>
+  :root {
+    --bg: #0b0f17; --panel: #131a26; --line: #223047; --fg: #e6edf6;
+    --muted: #8aa0bd; --accent: #4f9dff; --hot: #ffb020; --ok: #34d399; --bad: #f87171;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f4f7fb; --panel:#fff; --line:#dce4ef; --fg:#0d1826; --muted:#5a6b82; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:var(--bg); color:var(--fg); }
+  header { padding:20px 24px; border-bottom:1px solid var(--line); display:flex;
+           align-items:baseline; gap:12px; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; }
+  header .sub { color:var(--muted); font-size:13px; }
+  .status { margin-left:auto; font-size:13px; color:var(--muted); }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--bad);
+         margin-right:6px; vertical-align:middle; }
+  .dot.up { background:var(--ok); }
+  main { max-width:960px; margin:0 auto; padding:24px; display:grid; gap:20px;
+         grid-template-columns:1fr 1fr; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px; }
+  .card h2 { margin:0 0 12px; font-size:13px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+  .wide { grid-column:1 / -1; }
+  .kv { display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dashed var(--line); }
+  .kv:last-child { border-bottom:0; }
+  .kv span:first-child { color:var(--muted); }
+  .milestone { margin-top:4px; }
+  .bar { height:10px; background:var(--line); border-radius:6px; overflow:hidden; margin:8px 0; }
+  .bar > i { display:block; height:100%; background:var(--accent); transition:width .5s ease; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:600; }
+  .pill.quiet{background:#33415522;color:var(--muted);} .pill.warm{background:#4f9dff22;color:var(--accent);}
+  .pill.hot{background:#ffb02022;color:var(--hot);} .pill.fulfilled{background:#34d39922;color:var(--ok);}
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:9px 16px;
+           font-size:14px; font-weight:600; cursor:pointer; }
+  button:hover { filter:brightness(1.08); } button:disabled{opacity:.5;cursor:default;}
+  .log { font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; background:var(--bg);
+         border:1px solid var(--line); border-radius:8px; padding:12px; height:220px; overflow:auto; }
+  .log div { white-space:pre-wrap; }
+  .log .fire { color:var(--ok); font-weight:700; }
+  .log .adv { color:var(--accent); }
+  .flash { animation:flash 1.2s ease; }
+  @keyframes flash { 0%{background:var(--ok);color:#012} 100%{} }
+  .amount { font-variant-numeric:tabular-nums; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚽ PlayerBoard</h1>
+  <span class="sub">player-side contract mirror · read-only · this athlete's board only</span>
+  <span class="status"><span id="dot" class="dot"></span><span id="wsState">connecting…</span></span>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Athlete</h2>
+    <div id="who" class="kv"><span>loading…</span><span></span></div>
+    <div class="kv"><span>role</span><span id="role">—</span></div>
+  </section>
+
+  <section class="card">
+    <h2>Contract</h2>
+    <div id="contract"><div class="kv"><span>loading…</span><span></span></div></div>
+  </section>
+
+  <section class="card wide">
+    <h2>Performance Milestone</h2>
+    <div id="milestones"><div class="kv"><span>loading…</span><span></span></div></div>
+    <div style="margin-top:14px; display:flex; gap:10px; align-items:center;">
+      <span class="sub">Appearances
+        <a id="clubLink" href="/club.html" target="_blank" style="color:var(--accent)">ClubBoard ▶</a></span>
+    </div>
+  </section>
+
+  <section class="card wide" id="liveFeedCard">
+    <h2>Live event stream (WebSocket)</h2>
+    <div id="log" class="log"><div class="sub">waiting for events…</div></div>
+  </section>
+</main>
+
+<script>
+const API = location.origin + "/api/v1";
+let token = null, athleteId = null;
+
+const $ = (id) => document.getElementById(id);
+function log(msg, cls, whenIso) {
+  const box = $("log");
+  if (box.querySelector(".sub")) box.innerHTML = "";
+  const el = document.createElement("div");
+  if (cls) el.className = cls;
+  const when = whenIso ? new Date(whenIso) : new Date();
+  el.textContent = when.toLocaleTimeString() + "  " + msg;
+  box.prepend(el);
+}
+
+// Shared by history replay (on load) and live WebSocket messages, so both render identically.
+function renderEvent(ev, whenIso) {
+  if (ev.type === "MilestoneFulfilled") {
+    log(`🎉 BONUS FIRED — appearance #${ev.boundary}: ${money(ev.amount, ev.currency)} now owed (state=${ev.state})`, "fire", whenIso);
+    document.getElementById("liveFeedCard").classList.add("flash");
+  } else {
+    log(`→ ${ev.type}: progress ${ev.progress}/${ev.target} (${ev.state})`, "adv", whenIso);
+  }
+}
+
+async function boot() {
+  // Dev token minter (DevMode only). Pass ?athlete_id=<id> in the URL to view a specific
+  // player's board (e.g. open two tabs side by side with different athlete_ids and prove
+  // that a ClubBoard action for one player never shows up on the other's board).
+  const requested = new URLSearchParams(location.search).get("athlete_id");
+  const tokenURL = API + "/dev/token" + (requested ? ("?athlete_id=" + encodeURIComponent(requested)) : "");
+  const t = await fetch(tokenURL, { method: "POST" }).then(r => r.json());
+  token = t.token; athleteId = t.athlete_id;
+  $("who").innerHTML = `<span>athlete_id</span><span>${t.athlete_id}</span>`;
+  $("role").textContent = t.role;
+  $("clubLink").href = "/club.html";
+  await refresh();
+  await loadHistory();
+  connectWS();
+}
+
+// The WebSocket only ever delivers events that happen after it connects — without this, the
+// live-feed panel comes back empty on every refresh even though nothing was actually lost (the
+// outbox already durably logged it). Replay recent history first, then switch to live pushes.
+async function loadHistory() {
+  const h = { Authorization: "Bearer " + token };
+  const r = await fetch(API + "/me/events", { headers: h }).then(r => r.json());
+  (r.events || []).forEach(ev => renderEvent(ev, ev.at));
+}
+
+async function refresh() {
+  const h = { Authorization: "Bearer " + token };
+  const [c, m] = await Promise.all([
+    fetch(API + "/me/contracts", { headers: h }).then(r => r.json()),
+    fetch(API + "/me/milestones", { headers: h }).then(r => r.json()),
+  ]);
+  renderContract(c.contracts || []);
+  renderMilestones(m.milestones || []);
+}
+
+function money(v, cur) { return (v / 100).toLocaleString() + " " + cur; }
+
+function renderContract(list) {
+  $("contract").innerHTML = list.map(c => `
+    <div class="kv"><span>move</span><span>${c.club_from} → ${c.club_to}</span></div>
+    <div class="kv"><span>fixed</span><span class="amount">${money(c.fixed_amount, c.currency)}</span></div>
+    <div class="kv"><span>salary</span><span class="amount">${money(c.salary, c.currency)}</span></div>
+    <div class="kv"><span>status</span><span>${c.status}</span></div>`).join("") || "<div class='kv'><span>no contracts</span></div>";
+}
+
+function renderMilestones(list) {
+  $("milestones").innerHTML = list.map(m => {
+    const pct = Math.min(100, Math.round(100 * m.progress / m.target));
+    return `
+    <div class="milestone">
+      <div class="kv"><span>${m.metric} bonus — ${money(m.amount, m.currency)} per tranche</span>
+        <span class="pill ${m.state}">${m.state}</span></div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <div class="kv"><span>progress</span><span>${m.progress} / ${m.target} (tranche ${m.tranche})</span></div>
+    </div>`;
+  }).join("") || "<div class='kv'><span>no milestones</span></div>";
+}
+
+function connectWS() {
+  const url = location.origin.replace(/^http/, "ws") + "/api/v1/me/stream?token=" + encodeURIComponent(token);
+  const ws = new WebSocket(url);
+  ws.onopen = () => { $("dot").className = "dot up"; $("wsState").textContent = "live"; log("websocket connected"); };
+  ws.onclose = () => { $("dot").className = "dot"; $("wsState").textContent = "disconnected"; setTimeout(connectWS, 1500); };
+  ws.onmessage = (e) => {
+    renderEvent(JSON.parse(e.data));
+    refresh();
+  };
+}
+
+boot().catch(e => log("boot error: " + e.message, "fire"));
+</script>
+</body>
+</html>

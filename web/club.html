@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ClubBoard — Dev Console</title>
+<style>
+  :root {
+    --bg: #0b0f17; --panel: #131a26; --line: #223047; --fg: #e6edf6;
+    --muted: #8aa0bd; --accent: #4f9dff; --hot: #ffb020; --ok: #34d399; --bad: #f87171;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f4f7fb; --panel:#fff; --line:#dce4ef; --fg:#0d1826; --muted:#5a6b82; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:var(--bg); color:var(--fg); }
+  header { padding:20px 24px; border-bottom:1px solid var(--line); display:flex;
+           align-items:baseline; gap:12px; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; }
+  header .sub { color:var(--muted); font-size:13px; }
+  .status { margin-left:auto; font-size:13px; color:var(--muted); }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--bad);
+         margin-right:6px; vertical-align:middle; }
+  .dot.up { background:var(--ok); }
+  main { max-width:960px; margin:0 auto; padding:24px; display:grid; gap:20px; grid-template-columns:1fr; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px; }
+  .card h2 { margin:0 0 12px; font-size:13px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); font-size:14px; }
+  th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+  .aid { font:12px ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--muted); }
+  .bar { height:8px; width:140px; background:var(--line); border-radius:6px; overflow:hidden; }
+  .bar > i { display:block; height:100%; background:var(--accent); }
+  .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:600; }
+  .pill.quiet{background:#33415522;color:var(--muted);} .pill.warm{background:#4f9dff22;color:var(--accent);}
+  .pill.hot{background:#ffb02022;color:var(--hot);} .pill.fulfilled{background:#34d39922;color:var(--ok);}
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:7px 14px;
+           font-size:13px; font-weight:600; cursor:pointer; }
+  button:hover { filter:brightness(1.08); } button:disabled{opacity:.5;cursor:default;}
+  a.playerlink { color:var(--muted); font-size:12px; text-decoration:underline; }
+  .log { font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; background:var(--bg);
+         border:1px solid var(--line); border-radius:8px; padding:12px; height:260px; overflow:auto; }
+  .log div { white-space:pre-wrap; }
+  .log .fire { color:var(--ok); font-weight:700; }
+  .log .adv { color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏟 ClubBoard</h1>
+  <span class="sub">club-side console (ScoreBoard) · records appearances for the whole roster</span>
+  <span class="status"><span id="dot" class="dot"></span><span id="wsState">connecting…</span></span>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Roster</h2>
+    <table>
+      <thead><tr><th>Player</th><th>Progress</th><th>State</th><th></th><th></th></tr></thead>
+      <tbody id="roster"><tr><td colspan="5">loading…</td></tr></tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>Live feed — every player, broadcast to this club console</h2>
+    <div id="log" class="log"><div class="sub">waiting for events…</div></div>
+  </section>
+</main>
+
+<script>
+const API = location.origin + "/api/v1";
+let roster = []; // last fetched roster, used to resolve athlete_id -> display_name in the feed
+
+const $ = (id) => document.getElementById(id);
+function log(msg, cls, whenIso) {
+  const box = $("log");
+  if (box.querySelector(".sub")) box.innerHTML = "";
+  const el = document.createElement("div");
+  if (cls) el.className = cls;
+  const when = whenIso ? new Date(whenIso) : new Date();
+  el.textContent = when.toLocaleTimeString() + "  " + msg;
+  box.prepend(el);
+}
+
+function money(v, cur) { return (v / 100).toLocaleString() + " " + cur; }
+function short(id) { return id.slice(0, 8) + "…"; }
+function nameFor(athleteId) {
+  const r = roster.find(x => x.athlete_id === athleteId);
+  return r ? r.display_name : short(athleteId);
+}
+
+// Shared by history replay (on load) and live WebSocket messages, so both render identically.
+function renderEvent(ev, whenIso) {
+  const who = nameFor(ev.athlete_id);
+  if (ev.type === "MilestoneFulfilled") {
+    log(`🎉 BONUS FIRED — ${who} — appearance #${ev.boundary}: ${money(ev.amount, ev.currency)} now owed — pushed to their PlayerBoard`, "fire", whenIso);
+  } else {
+    log(`→ ${who}: ${ev.progress}/${ev.target} appearances (${ev.state})`, "adv", whenIso);
+  }
+}
+
+// The WebSocket only ever delivers events that happen after it connects — without this, the
+// live-feed panel comes back empty on every refresh even though nothing was actually lost (the
+// outbox already durably logged it). Replay recent history first, then switch to live pushes.
+async function loadHistory() {
+  const r = await fetch(API + "/club/events").then(r => r.json());
+  (r.events || []).forEach(ev => renderEvent(ev, ev.at));
+}
+
+async function loadRoster() {
+  const r = await fetch(API + "/club/athletes").then(r => r.json());
+  roster = r.roster || [];
+  $("roster").innerHTML = roster.map(p => {
+    const pct = Math.min(100, Math.round(100 * p.progress / p.target));
+    return `
+    <tr data-athlete="${p.athlete_id}">
+      <td>${p.display_name}<br/><span class="aid">${p.athlete_id}</span></td>
+      <td><div class="bar"><i style="width:${pct}%"></i></div>
+          <span class="sub">${p.progress} / ${p.target} (tranche ${p.tranche})</span></td>
+      <td><span class="pill ${p.state}">${p.state}</span></td>
+      <td><button data-record="${p.athlete_id}">Record appearance ▶</button></td>
+      <td><a class="playerlink" target="_blank" href="/index.html?athlete_id=${p.athlete_id}">open this player's board →</a></td>
+    </tr>`;
+  }).join("") || "<tr><td colspan='5'>no players under contract</td></tr>";
+
+  $("roster").querySelectorAll("button[data-record]").forEach(btn => {
+    btn.onclick = () => recordAppearance(btn.dataset.record, btn);
+  });
+}
+
+async function recordAppearance(athleteId, btn) {
+  btn.disabled = true;
+  try {
+    const resp = await fetch(API + "/club/record-appearance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ athlete_id: athleteId }),
+    });
+    log(`club recorded an appearance for ${nameFor(athleteId)} (HTTP ${resp.status})`);
+    await loadRoster();
+  } finally {
+    setTimeout(() => btn.disabled = false, 400);
+  }
+}
+
+function connectWS() {
+  const url = location.origin.replace(/^http/, "ws") + "/api/v1/club/stream";
+  const ws = new WebSocket(url);
+  ws.onopen = () => { $("dot").className = "dot up"; $("wsState").textContent = "live"; log("club stream connected"); };
+  ws.onclose = () => { $("dot").className = "dot"; $("wsState").textContent = "disconnected"; setTimeout(connectWS, 1500); };
+  ws.onmessage = (e) => {
+    renderEvent(JSON.parse(e.data));
+    loadRoster();
+  };
+}
+
+loadRoster().then(loadHistory).then(connectWS).catch(e => log("load error: " + e.message, "fire"));
+</script>
+</body>
+</html>
