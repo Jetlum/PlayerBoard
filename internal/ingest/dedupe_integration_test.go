@@ -18,7 +18,8 @@ import (
 )
 
 // Set TEST_DATABASE_URL to run this against a real Postgres, e.g.:
-//   TEST_DATABASE_URL=postgres://player:player@localhost:5544/playerboard?sslmode=disable go test ./internal/ingest -run Dedupe -v
+//
+//	TEST_DATABASE_URL=postgres://player:player@localhost:5544/playerboard?sslmode=disable go test ./internal/ingest -run Dedupe -v
 func TestWebhookDedupe(t *testing.T) {
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {

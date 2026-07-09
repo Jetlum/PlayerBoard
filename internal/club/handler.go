@@ -131,16 +131,11 @@ func (h *Handler) recentEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	// rows are newest-first (as queried); walk backwards so the response is oldest-first — the
 	// frontend replays in order and ends up with the newest entry on top, exactly like a live push.
-	out := make([]eventView, 0, len(rows))
+	out := make([]events.HistoricalEvent, 0, len(rows))
 	for i := len(rows) - 1; i >= 0; i-- {
 		var evt events.MilestoneChanged
 		_ = json.Unmarshal(rows[i].Payload, &evt)
-		out = append(out, eventView{MilestoneChanged: evt, At: rows[i].CreatedAt.Format(time.RFC3339)})
+		out = append(out, events.HistoricalEvent{MilestoneChanged: evt, At: rows[i].CreatedAt.Format(time.RFC3339)})
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{"events": out})
-}
-
-type eventView struct {
-	events.MilestoneChanged
-	At string `json:"at"`
 }

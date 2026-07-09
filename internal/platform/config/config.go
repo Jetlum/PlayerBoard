@@ -8,30 +8,30 @@ import (
 )
 
 type Config struct {
-	Port           string
-	DatabaseURL    string
-	NATSURL        string
-	JWTSecret      string
-	WebhookSecret  string // shared HMAC secret with ScoreBoard
-	SignatureSchme string // "hmac" (default) or "rsa"
-	RSAPublicKey   string // PEM, required when SignatureSchme == "rsa"
-	DevMode        bool   // enables the /dev/token minter
-	WorkerPoolSize int
-	MigrationsDir  string
+	Port            string
+	DatabaseURL     string
+	NATSURL         string
+	JWTSecret       string
+	WebhookSecret   string // shared HMAC secret with ScoreBoard
+	SignatureScheme string // "hmac" (default) or "rsa"
+	RSAPublicKey    string // PEM, required when SignatureScheme == "rsa"
+	DevMode         bool   // enables the /dev/token minter
+	WorkerPoolSize  int
+	MigrationsDir   string
 }
 
 func Load() (Config, error) {
 	c := Config{
-		Port:           envOr("PORT", "8080"),
-		DatabaseURL:    os.Getenv("DATABASE_URL"),
-		NATSURL:        envOr("NATS_URL", "nats://127.0.0.1:4222"),
-		JWTSecret:      envOr("JWT_SECRET", "dev-jwt-secret-change-me"),
-		WebhookSecret:  envOr("WEBHOOK_HMAC_SECRET", "dev-webhook-secret-change-me"),
-		SignatureSchme: envOr("SIGNATURE_SCHEME", "hmac"),
-		RSAPublicKey:   os.Getenv("WEBHOOK_RSA_PUBLIC_KEY"),
-		DevMode:        envOr("DEV_MODE", "false") == "true",
-		WorkerPoolSize: envInt("WORKER_POOL_SIZE", 4),
-		MigrationsDir:  envOr("MIGRATIONS_DIR", ""),
+		Port:            envOr("PORT", "8080"),
+		DatabaseURL:     os.Getenv("DATABASE_URL"),
+		NATSURL:         envOr("NATS_URL", "nats://127.0.0.1:4222"),
+		JWTSecret:       envOr("JWT_SECRET", "dev-jwt-secret-change-me"),
+		WebhookSecret:   envOr("WEBHOOK_HMAC_SECRET", "dev-webhook-secret-change-me"),
+		SignatureScheme: envOr("SIGNATURE_SCHEME", "hmac"),
+		RSAPublicKey:    os.Getenv("WEBHOOK_RSA_PUBLIC_KEY"),
+		DevMode:         envOr("DEV_MODE", "false") == "true",
+		WorkerPoolSize:  envInt("WORKER_POOL_SIZE", 4),
+		MigrationsDir:   envOr("MIGRATIONS_DIR", ""),
 	}
 	if c.DatabaseURL == "" {
 		return c, fmt.Errorf("DATABASE_URL is required")

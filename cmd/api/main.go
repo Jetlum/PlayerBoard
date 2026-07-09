@@ -112,7 +112,7 @@ func run() error {
 	clubWSH := realtime.NewClubStreamHandler(clubHub)
 
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID, middleware.RealIP, middleware.Recoverer)
+	r.Use(middleware.RequestID, middleware.Recoverer)
 
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	r.Get("/readyz", func(w http.ResponseWriter, req *http.Request) {
@@ -168,7 +168,7 @@ func run() error {
 		_ = srv.Shutdown(shutCtx)
 	}()
 
-	log.Info("api listening", "port", cfg.Port, "signature_scheme", cfg.SignatureSchme)
+	log.Info("api listening", "port", cfg.Port, "signature_scheme", cfg.SignatureScheme)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
@@ -177,7 +177,7 @@ func run() error {
 }
 
 func buildVerifier(cfg config.Config) (ingest.Verifier, error) {
-	switch cfg.SignatureSchme {
+	switch cfg.SignatureScheme {
 	case "rsa":
 		pub, err := ingest.ParseRSAPublicKey([]byte(cfg.RSAPublicKey))
 		if err != nil {
@@ -213,7 +213,7 @@ func devTokenHandler(secret string) http.HandlerFunc {
 // appearance" action (internal/club) is the production-shaped equivalent used by the UI.
 func devSimulateHandler(cfg config.Config, selfURL string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if cfg.SignatureSchme != "hmac" {
+		if cfg.SignatureScheme != "hmac" {
 			httpx.Error(w, http.StatusBadRequest, "simulate supports the hmac scheme only")
 			return
 		}

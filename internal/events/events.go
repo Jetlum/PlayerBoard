@@ -30,3 +30,10 @@ type MilestoneChanged struct {
 	Amount      int64  `json:"amount,omitempty"`
 	Currency    string `json:"currency,omitempty"`
 }
+
+// HistoricalEvent pairs a MilestoneChanged with its persisted timestamp, for the "replay
+// history on page load" endpoints in both internal/club and internal/milestone.
+type HistoricalEvent struct {
+	MilestoneChanged
+	At string `json:"at"`
+}
