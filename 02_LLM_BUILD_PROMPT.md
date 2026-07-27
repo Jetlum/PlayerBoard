@@ -96,3 +96,9 @@ milestone, personal_sponsorship, conflict, inbound_event, outbox, audit_log`.
 Produce complete, compiling files (not snippets), grouped by path, in the stage order above.
 After each stage, print a one-line summary of what to run to verify it. Prefer clarity and
 idiomatic Go over cleverness. Add short comments only where the *why* isn't obvious.
+
+
+Other prompts:
+Add on this application  an option to add a contract/file that takes a contract a document and reads it gives you our important pinpoints of the contract can also compare it with your past contracts of the players, so add a section info about player contract
+
+checks for similarities any updates on new contract any same stuff any legal loopholes and illegal stuff that it's not supported by law we'll check for legal or check for technical details and all of stuff in this contract and also compared with past contracts in all aspect of the legality technicality and other stuff
