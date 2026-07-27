@@ -14,8 +14,6 @@ specific athlete finding out about it, live).
    surface. *Read this first — it describes the actual running system, not just the concept.*
 2. **02_LLM_BUILD_PROMPT.md** — the original prompt used to scaffold the backend, now annotated
    with a status banner showing what shipped vs. what was simplified.
-3. **03_INTERVIEW_TALKING_POINTS.md** — decision-and-tradeoff cheat sheet, reconciled with what's
-   actually implemented (corrected where the original concept overclaimed).
 4. **README-run.md** — every command: first run, and how to rebuild/restart after a code change.
 
 ## The demo
