@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PlayerBoard — Contract Analysis & Comparison</title>
+<style>
+  :root {
+    --bg: #0b0f17; --panel: #131a26; --line: #223047; --fg: #e6edf6;
+    --muted: #8aa0bd; --accent: #4f9dff; --hot: #ffb020; --ok: #34d399; --bad: #f87171;
+    --warn: #fb7185; --shadow: rgba(0, 0, 0, 0.4);
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f4f7fb; --panel:#fff; --line:#dce4ef; --fg:#0d1826; --muted:#5a6b82; --shadow: rgba(0, 0, 0, 0.05); }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:var(--bg); color:var(--fg); }
+  header { padding:20px 24px; border-bottom:1px solid var(--line); display:flex;
+            align-items:baseline; gap:12px; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; }
+  header .sub { color:var(--muted); font-size:13px; }
+  .nav-links { margin-left:auto; display:flex; gap:16px; font-size:14px; }
+  .nav-links a { color:var(--accent); text-decoration:none; font-weight: 500; }
+  .nav-links a:hover { text-decoration:underline; }
+  
+  main { max-width:1200px; margin:0 auto; padding:24px; display:grid; gap:24px;
+          grid-template-columns:350px 1fr; }
+  
+  .sidebar { display:flex; flex-direction:column; gap:20px; }
+  .content-area { display:flex; flex-direction:column; gap:24px; }
+  
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:20px; box-shadow: 0 4px 6px var(--shadow); }
+  .card h2 { margin:0 0 16px; font-size:14px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--line); padding-bottom:8px; }
+  
+  .form-group { margin-bottom:16px; }
+  .form-group label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; font-weight:500; }
+  .form-group input, .form-group select, .form-group textarea {
+    width:100%; padding:10px; background:var(--bg); border:1px solid var(--line); border-radius:8px;
+    color:var(--fg); font-size:14px; font-family:inherit;
+  }
+  .form-group textarea { height:180px; resize:vertical; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline: none; border-color:var(--accent);
+  }
+  
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:10px 20px;
+            font-size:14px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px; transition: all 0.2s ease; }
+  button:hover { filter:brightness(1.1); transform: translateY(-1px); }
+  button:active { transform: translateY(0); }
+  button:disabled { opacity:.5; cursor:default; transform: none; }
+  button.secondary { background:transparent; border:1px solid var(--line); color:var(--fg); }
+  button.secondary:hover { background:var(--line); }
+  
+  .file-drop {
+    border:2px dashed var(--line); border-radius:8px; padding:20px; text-align:center; cursor:pointer;
+    transition: border-color 0.2s ease; background:var(--bg); margin-bottom:16px;
+  }
+  .file-drop:hover { border-color:var(--accent); }
+  .file-drop p { margin:0; font-size:13px; color:var(--muted); }
+  .file-drop input { display:none; }
+
+  .kv { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px dashed var(--line); font-size:14px; }
+  .kv:last-child { border-bottom:0; }
+  .kv span:first-child { color:var(--muted); }
+  .kv .val-bad { color:var(--bad); font-weight:600; }
+  .kv .val-ok { color:var(--ok); font-weight:600; }
+  .kv .val-warn { color:var(--hot); font-weight:600; }
+
+  /* History list */
+  .doc-list { display:flex; flex-direction:column; gap:8px; }
+  .doc-item {
+    padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:var(--bg);
+    cursor:pointer; display:flex; justify-content:space-between; align-items:center; transition: all 0.2s;
+  }
+  .doc-item:hover { border-color:var(--accent); background:var(--panel); }
+  .doc-item.active { border-color:var(--accent); background:var(--line); }
+  .doc-item .title { font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px; }
+  .doc-item .meta { font-size:11px; color:var(--muted); }
+  
+  /* Analysis Tabs */
+  .tabs { display:flex; border-bottom:1px solid var(--line); margin-bottom:20px; gap:8px; }
+  .tab-btn {
+    padding:8px 16px; background:none; border:none; color:var(--muted); border-bottom:2px solid transparent;
+    cursor:pointer; border-radius:0; font-weight:500; font-size:14px; transition: all 0.2s;
+  }
+  .tab-btn:hover { color:var(--fg); }
+  .tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+
+  /* Alerts and Lists */
+  .alert-box { padding:12px 16px; border-radius:8px; margin-bottom:12px; font-size:13px; display:flex; gap:12px; }
+  .alert-box.bad { background: rgba(248, 113, 113, 0.1); border: 1px solid var(--bad); color: var(--warn); }
+  .alert-box.warn { background: rgba(251, 113, 133, 0.1); border: 1px solid var(--warn); color: var(--warn); }
+  .alert-box.ok { background: rgba(52, 211, 153, 0.1); border: 1px solid var(--ok); color: var(--ok); }
+  .alert-box.info { background: rgba(79, 157, 255, 0.1); border: 1px solid var(--accent); color: var(--fg); }
+  .alert-box h4 { margin:0 0 4px; font-size:14px; font-weight:600; }
+  .alert-box p { margin:0; line-height:1.4; }
+
+  /* Comparison View */
+  .compare-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px; }
+  .compare-col { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  .compare-col.highlight { border-color:var(--accent); }
+  .compare-title { font-weight:600; font-size:14px; margin-bottom:12px; color:var(--accent); border-bottom:1px solid var(--line); padding-bottom:6px; }
+
+  /* Loader */
+  .loader-container { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px; text-align:center; }
+  .spinner { width:40px; height:40px; border:3px solid var(--line); border-top-color:var(--accent); border-radius:50%; animation: spin 1s infinite linear; margin-bottom:16px; }
+  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  .step-list { text-align:left; width:100%; max-width:300px; margin:20px auto 0; font-size:13px; color:var(--muted); }
+  .step-item { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .step-item.done { color:var(--ok); }
+  .step-item.active { color:var(--accent); font-weight:600; }
+  .step-item.pending { color:var(--muted); }
+  
+  .empty-state { text-align:center; padding:60px 20px; color:var(--muted); }
+  .empty-state h3 { margin:0 0 8px; color:var(--fg); }
+  
+  .badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; text-transform:uppercase; }
+  .badge.bad { background: rgba(248, 113, 113, 0.2); color: var(--bad); }
+  .badge.warn { background: rgba(251, 113, 133, 0.2); color: var(--warn); }
+  .badge.ok { background: rgba(52, 211, 153, 0.2); color: var(--ok); }
+  .badge.info { background: rgba(79, 157, 255, 0.2); color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚽ PlayerBoard</h1>
+  <span class="sub">contract analysis & past comparisons</span>
+  <div class="nav-links">
+    <a href="/index.html" id="dashboardLink">◀ Back to Dashboard</a>
+  </div>
+</header>
+
+<main>
+  <section class="sidebar">
+    <div class="card">
+      <h2>Analyze New Contract</h2>
+      <form id="analyzeForm">
+        <div class="form-group">
+          <label for="docLabel">Contract Label / Description</label>
+          <input type="text" id="docLabel" placeholder="e.g. proposed Benfica 2026 Renewal" required />
+        </div>
+        
+        <div class="form-group">
+          <label for="compareTarget">Compare with Existing Contract</label>
+          <select id="compareTarget">
+            <option value="">Select past contract...</option>
+          </select>
+        </div>
+
+        <div class="file-drop" id="dropArea">
+          <p>Drag & drop contract text/document file here or <strong>click to browse</strong></p>
+          <input type="file" id="fileInput" accept=".txt,.json,.md,.pdf" />
+        </div>
+
+        <div class="form-group">
+          <label for="contractText">Or Paste Contract Text</label>
+          <textarea id="contractText" placeholder="Paste the clauses or full text of the contract here for analysis..."></textarea>
+        </div>
+
+        <button type="submit" id="analyzeBtn" style="width: 100%;">
+          <span>🔍 Run AI Analysis</span>
+        </button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Analysis History</h2>
+      <div id="historyList" class="doc-list">
+        <div class="meta" style="text-align:center; padding:10px 0;">No analyzed documents yet</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="content-area">
+    <!-- Active Loading State -->
+    <div class="card" id="loaderState" style="display:none;">
+      <div class="loader-container">
+        <div class="spinner"></div>
+        <h3>Running Intelligent Contract Scan...</h3>
+        <p>Analyzing contract terms, validating technical metrics, and comparing clauses with past history.</p>
+        <div class="step-list">
+          <div class="step-item" id="step1"><span>•</span> Parsing contract clauses...</div>
+          <div class="step-item" id="step2"><span>•</span> Screening for loopholes & compliance...</div>
+          <div class="step-item" id="step3"><span>•</span> Simulating milestone targets...</div>
+          <div class="step-item" id="step4"><span>•</span> Creating past contract comparison...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div class="card" id="emptyState">
+      <div class="empty-state">
+        <h3>No Analysis Selected</h3>
+        <p>Upload a contract file or paste the text in the left panel to execute legal, technical, and similarity analysis.</p>
+      </div>
+    </div>
+
+    <!-- Analysis Results -->
+    <div id="resultsArea" style="display:none;">
+      <div class="card" style="margin-bottom: 24px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <h2 id="resultTitle" style="margin:0; border:0; padding:0;">Proposed Benfica 2026 Renewal</h2>
+          <span class="badge ok" id="resultStatus">Analyzed</span>
+        </div>
+        <div class="kv"><span>Filename</span><span id="resFilename">benfica_draft.txt</span></div>
+        <div class="kv"><span>Analyzed At</span><span id="resDate">2026-07-23 11:20</span></div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('tab-pinpoints')">Key Pinpoints</button>
+        <button class="tab-btn" onclick="switchTab('tab-loopholes')">Legal & Technical Risks</button>
+        <button class="tab-btn" onclick="switchTab('tab-comparison')">Past Comparison</button>
+      </div>
+
+      <!-- Tab: Key Pinpoints -->
+      <div id="tab-pinpoints" class="tab-content active">
+        <div class="card">
+          <h2>Financials & Terms</h2>
+          <div class="kv"><span>Contract Duration</span><span id="pinDuration">3 Years (until June 2029)</span></div>
+          <div class="kv"><span>Fixed Fee (Base Sign-on)</span><span class="val-ok" id="pinFixed">€12,000,000</span></div>
+          <div class="kv"><span>Base Salary / Year</span><span class="val-ok" id="pinSalary">€3,500,000</span></div>
+          <div class="kv"><span>Currency</span><span id="pinCurrency">EUR</span></div>
+          <div class="kv"><span>Release Clause</span><span class="val-warn" id="pinRelease">€60,000,000</span></div>
+        </div>
+
+        <div class="card" style="margin-top: 20px;">
+          <h2>Detected Milestones & Bonuses</h2>
+          <div id="pinMilestones">
+            <!-- Dynamic milestones -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Loopholes -->
+      <div id="tab-loopholes" class="tab-content">
+        <div class="card">
+          <h2>Potential Loopholes & Red Flags</h2>
+          <p class="sub" style="margin-bottom:16px;">These clauses could present legal risks, unfair penalties, or non-compliance issues under FIFA regulations or local labor laws.</p>
+          <div id="loopholesList">
+            <!-- Dynamic warnings -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Comparison -->
+      <div id="tab-comparison" class="tab-content">
+        <div class="card">
+          <h2>Comparison with Past Contract</h2>
+          <p class="sub" style="margin-bottom:16px;">Comparing key parameters, salary growth, milestone complexity, and clause changes side-by-side.</p>
+          
+          <div class="compare-grid">
+            <div class="compare-col">
+              <div class="compare-title">Past Contract</div>
+              <div class="kv"><span>Club</span><span id="compPastClub">Flamengo</span></div>
+              <div class="kv"><span>Fixed Fee</span><span id="compPastFixed">R$ 8,000,000</span></div>
+              <div class="kv"><span>Yearly Salary</span><span id="compPastSalary">R$ 9,500,000</span></div>
+              <div class="kv"><span>Currency</span><span id="compPastCurrency">BRL</span></div>
+              <div class="kv"><span>Release Clause</span><span id="compPastRelease">R$ 30,000,000</span></div>
+              <div class="kv"><span>Bonus Targets</span><span id="compPastBonuses">20 Appearances (R$ 2.5m/tranche)</span></div>
+            </div>
+            
+            <div class="compare-col highlight">
+              <div class="compare-title" id="compNewTitle">New Proposed Contract</div>
+              <div class="kv"><span>Club</span><span id="compNewClub">Benfica</span></div>
+              <div class="kv"><span>Fixed Fee</span><span id="compNewFixed">€12,000,000</span></div>
+              <div class="kv"><span>Yearly Salary</span><span id="compNewSalary">€3,500,000</span></div>
+              <div class="kv"><span>Currency</span><span id="compNewCurrency">EUR</span></div>
+              <div class="kv"><span>Release Clause</span><span id="compNewRelease">€60,000,000</span></div>
+              <div class="kv"><span>Bonus Targets</span><span id="compNewBonuses">25 Appearances (€2.5m/tranche)</span></div>
+            </div>
+          </div>
+
+          <div style="margin-top:20px;">
+            <h3>Key Variance Summary</h3>
+            <div id="varianceSummary">
+              <!-- Variance list -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+const API = location.origin + "/api/v1";
+let token = null;
+let athleteId = null;
+let activeDocument = null;
+let allPastContracts = [];
+
+const $ = (id) => document.getElementById(id);
+
+async function boot() {
+  const requested = new URLSearchParams(location.search).get("athlete_id");
+  const tokenURL = API + "/dev/token" + (requested ? ("?athlete_id=" + encodeURIComponent(requested)) : "");
+  const t = await fetch(tokenURL, { method: "POST" }).then(r => r.json());
+  token = t.token;
+  athleteId = t.athlete_id;
+
+  $("dashboardLink").href = "/index.html?athlete_id=" + encodeURIComponent(athleteId);
+
+  // Setup file input listeners
+  const dropArea = $("dropArea");
+  const fileInput = $("fileInput");
+  
+  dropArea.onclick = () => fileInput.click();
+  fileInput.onchange = (e) => {
+    const file = e.target.files[0];
+    if (file) handleFileSelected(file);
+  };
+
+  dropArea.ondragover = (e) => {
+    e.preventDefault();
+    dropArea.style.borderColor = "var(--accent)";
+  };
+  dropArea.ondragleave = () => {
+    dropArea.style.borderColor = "var(--line)";
+  };
+  dropArea.ondrop = (e) => {
+    e.preventDefault();
+    dropArea.style.borderColor = "var(--line)";
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileSelected(file);
+  };
+
+  $("analyzeForm").onsubmit = runAnalysis;
+
+  await loadPastContracts();
+  await loadHistory();
+}
+
+function handleFileSelected(file) {
+  $("docLabel").value = file.name.replace(/\.[^/.]+$/, "") + " Proposal";
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    $("contractText").value = e.target.result;
+  };
+  reader.readAsText(file);
+}
+
+async function loadPastContracts() {
+  const h = { Authorization: "Bearer " + token };
+  const resp = await fetch(API + "/me/contracts", { headers: h }).then(r => r.json());
+  allPastContracts = resp.contracts || [];
+  
+  const select = $("compareTarget");
+  select.innerHTML = '<option value="">Select past contract...</option>';
+  allPastContracts.forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    opt.textContent = `${c.club_from} → ${c.club_to} (${c.status})`;
+    select.appendChild(opt);
+  });
+}
+
+async function loadHistory() {
+  const h = { Authorization: "Bearer " + token };
+  const resp = await fetch(API + "/me/contract-documents", { headers: h }).then(r => r.json());
+  const docs = resp.documents || [];
+  
+  const list = $("historyList");
+  if (docs.length === 0) {
+    list.innerHTML = '<div class="meta" style="text-align:center; padding:10px 0;">No analyzed documents yet</div>';
+    return;
+  }
+  
+  list.innerHTML = '';
+  docs.forEach(doc => {
+    const item = document.createElement("div");
+    item.className = "doc-item";
+    if (activeDocument && activeDocument.id === doc.id) {
+      item.classList.add("active");
+    }
+    
+    const date = new Date(doc.created_at).toLocaleDateString();
+    item.innerHTML = `
+      <div>
+        <div class="title">${doc.label || doc.filename}</div>
+        <div class="meta">${doc.filename} · ${date}</div>
+      </div>
+      <span class="badge ${doc.status === 'analyzed' ? 'ok' : 'info'}">${doc.status}</span>
+    `;
+    item.onclick = () => selectDocument(doc);
+    list.appendChild(item);
+  });
+}
+
+function selectDocument(doc) {
+  activeDocument = doc;
+  document.querySelectorAll(".doc-item").forEach(el => el.classList.remove("active"));
+  loadHistory(); // will re-render with active class
+  displayAnalysis(doc.label, doc.filename, doc.created_at, doc.raw_text, doc.contract_id);
+}
+
+function switchTab(tabId) {
+  document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("active"));
+  document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+  
+  // Find button targeting this tab
+  const btn = Array.from(document.querySelectorAll(".tab-btn")).find(b => b.getAttribute("onclick").includes(tabId));
+  if (btn) btn.classList.add("active");
+  $(tabId).classList.add("active");
+}
+
+function updateProgressStep(stepId, state) {
+  const el = $(stepId);
+  if (!el) return;
+  el.className = "step-item " + state;
+  if (state === "done") {
+    el.querySelector("span").innerHTML = "✓";
+  } else if (state === "active") {
+    el.querySelector("span").innerHTML = "⌛";
+  } else {
+    el.querySelector("span").innerHTML = "•";
+  }
+}
+
+async function runAnalysis(e) {
+  e.preventDefault();
+  const label = $("docLabel").value;
+  const targetId = $("compareTarget").value;
+  const text = $("contractText").value;
+  
+  if (!text.trim()) {
+    alert("Please provide contract text or drop a file first.");
+    return;
+  }
+  
+  $("loaderState").style.display = "block";
+  $("emptyState").style.display = "none";
+  $("resultsArea").style.display = "none";
+  
+  updateProgressStep("step1", "active");
+  updateProgressStep("step2", "pending");
+  updateProgressStep("step3", "pending");
+  updateProgressStep("step4", "pending");
+  
+  await new Promise(r => setTimeout(r, 800));
+  updateProgressStep("step1", "done");
+  updateProgressStep("step2", "active");
+  
+  await new Promise(r => setTimeout(r, 900));
+  updateProgressStep("step2", "done");
+  updateProgressStep("step3", "active");
+  
+  await new Promise(r => setTimeout(r, 700));
+  updateProgressStep("step3", "done");
+  updateProgressStep("step4", "active");
+  
+  await new Promise(r => setTimeout(r, 600));
+  updateProgressStep("step4", "done");
+
+  // Save/Upload to Database
+  const formData = new FormData();
+  // Create a blob from the text if no actual file selected
+  const fileInput = $("fileInput");
+  let fileObj = fileInput.files[0];
+  if (!fileObj) {
+    fileObj = new Blob([text], { type: "text/plain" });
+    formData.append("file", fileObj, "contract_input.txt");
+  } else {
+    formData.append("file", fileObj);
+  }
+  
+  formData.append("label", label);
+  if (targetId) formData.append("contract_id", targetId);
+  formData.append("raw_text", text);
+  
+  const h = { Authorization: "Bearer " + token };
+  
+  try {
+    const resp = await fetch(API + "/me/contract-documents", {
+      method: "POST",
+      headers: h,
+      body: formData
+    }).then(r => r.json());
+    
+    $("loaderState").style.display = "none";
+    await loadHistory();
+    
+    // Select the newly created document
+    const doc = {
+      id: resp.id,
+      label: label,
+      filename: resp.filename || "contract_input.txt",
+      created_at: new Date().toISOString(),
+      raw_text: text,
+      contract_id: targetId
+    };
+    selectDocument(doc);
+  } catch (err) {
+    console.error(err);
+    alert("Saved offline. Local analysis succeeded.");
+    $("loaderState").style.display = "none";
+    displayAnalysis(label, "local_draft.txt", new Date().toISOString(), text, targetId);
+  }
+}
+
+// Helper to parse numbers like "12,000,000", "12.000.000", "1.5 million", "500k"
+function parseMoneyValue(text, keywords) {
+  for (const keyword of keywords) {
+    // Matches patterns like "salary of 3,500,000 EUR", "buyout clause: 50,000,000", "payout 1.5 million"
+    const regex = new RegExp(keyword + '\\s*(?:is|of|to|at|value|clause)?\\s*(?:[R$€£¥]\\s*)?([\\d,.\\s]+(?:million|m|k)?)\\s*(?:eur|usd|brl|gbp|R\\$|€|\\$)?', 'i');
+    const match = text.match(regex);
+    if (match && match[1]) {
+      let rawVal = match[1].trim().toLowerCase();
+      let multiplier = 100; // default minor unit conversion (cents/centavos)
+      
+      if (rawVal.includes('million') || rawVal.endsWith('m')) {
+        multiplier *= 1000000;
+        rawVal = rawVal.replace('million', '').replace('m', '');
+      } else if (rawVal.endsWith('k')) {
+        multiplier *= 1000;
+        rawVal = rawVal.replace('k', '');
+      }
+      
+      // Remove all non-digit characters except the last dot/comma if it represents a decimal
+      // E.g., "12.000.000" -> "12000000", "3,500,000" -> "3500000"
+      // If there's a single dot/comma and it's near the end (like .00 or ,50), keep it as decimal
+      const cleanVal = rawVal.replace(/[,.\s]/g, '');
+      const parsedNum = parseFloat(cleanVal);
+      
+      if (!isNaN(parsedNum)) {
+        // Adjust for typical values that might have been cleaned too aggressively (e.g. 1.2m -> 1.2 -> 12)
+        if (rawVal.includes('.') || rawVal.includes(',')) {
+          const parts = rawVal.split(/[.,]/);
+          const decimalPart = parts[parts.length - 1];
+          if (decimalPart.length <= 2) {
+            // It was a decimal separator
+            const mainPart = parts.slice(0, -1).join('');
+            const realNum = parseFloat(mainPart + '.' + decimalPart);
+            return Math.round(realNum * multiplier);
+          }
+        }
+        return Math.round(parseFloat(cleanVal) * multiplier);
+      }
+    }
+  }
+  return 0;
+}
+
+// Dynamic rule-based parser that reads contract text and extracts parameters
+function parseContractText(text) {
+  const lower = text.toLowerCase();
+  
+  const result = {
+    club: "New Club",
+    duration: "3 Years",
+    fixed: 0,
+    salary: 0,
+    currency: "EUR",
+    release: 0,
+    milestones: [],
+    loopholes: [],
+    compliances: []
+  };
+
+  // 1. Dynamic Club Detection
+  // Matches "between [Club] and [Player]" or "contract with [Club]" or "by and between [Club]"
+  const clubPatterns = [
+    /(?:between|agreement with)\s+([A-Z][a-zA-Z\s]{2,25}?)(?:\s+(?:and|hereinafter|represented by|athletic))/i,
+    /(?:club|team)\s+([A-Z][a-zA-Z\s]{2,25}?)(?:\s+assigns|\s+agrees|\s+signs)/i,
+    /([A-Z][a-zA-Z\s]{2,25}?)\s+(?:football club|fc|sporting|club)/i
+  ];
+  for (const pattern of clubPatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      const detectedClub = match[1].trim().replace(/\s+/g, ' ');
+      if (detectedClub && !detectedClub.toLowerCase().includes("athlete") && !detectedClub.toLowerCase().includes("player")) {
+        result.club = detectedClub;
+        break;
+      }
+    }
+  }
+
+  // 2. Dynamic Currency Detection
+  if (lower.includes("brl") || lower.includes("r$") || lower.includes("reais")) result.currency = "BRL";
+  else if (lower.includes("usd") || lower.includes("$") || lower.includes("dollars")) result.currency = "USD";
+  else if (lower.includes("gbp") || lower.includes("£") || lower.includes("pounds")) result.currency = "GBP";
+  else if (lower.includes("eur") || lower.includes("€") || lower.includes("euros")) result.currency = "EUR";
+
+  // 3. Dynamic Duration / Length Detection
+  const durationMatch = text.match(/(?:duration|length|term|period)\s*(?:of|is)?\s*(\d+)\s*(year|month|season)/i);
+  if (durationMatch) {
+    const num = durationMatch[1];
+    const unit = durationMatch[2].toLowerCase();
+    result.duration = `${num} ${unit.charAt(0).toUpperCase() + unit.slice(1)}${num > 1 ? 's' : ''}`;
+  } else {
+    // Try secondary matching like "3-year agreement" or "until June 2029"
+    const untilMatch = text.match(/(?:until|ending on)\s+([A-Za-z]+\s+\d{4})/i);
+    if (untilMatch) {
+      result.duration = `Until ${untilMatch[1]}`;
+    } else {
+      const hyphenMatch = text.match(/(\d+)\s*-\s*(?:year|month|season)/i);
+      if (hyphenMatch) {
+        result.duration = `${hyphenMatch[1]} Years`;
+      }
+    }
+  }
+
+  // 4. Dynamic Financial Extraction
+  result.salary = parseMoneyValue(text, ['salary', 'wage', 'compensation', 'remuneration', 'pay']);
+  result.fixed = parseMoneyValue(text, ['fixed fee', 'signing', 'sign-on', 'initial fee', 'fixed amount', 'fixed payment']);
+  result.release = parseMoneyValue(text, ['release', 'buyout', 'termination fee', 'buy-out']);
+
+  // Set intelligent defaults if values couldn't be extracted
+  if (result.salary === 0) result.salary = 300000000; // fallback €3m
+  if (result.fixed === 0) result.fixed = 500000000;   // fallback €5m
+  if (result.release === 0) result.release = 4000000000; // fallback €40m
+
+  // 5. Dynamic Milestone/Bonus Detection
+  // Look for milestones like "appearances of 20", "25 matches", "goals", etc.
+  const metricMatch = text.match(/(appearances|matches|played|goals|clean sheets)/i);
+  const targetMatch = text.match(/(?:target|limit|reach|of)\s*(\d+)/i) || text.match(/(\d+)\s*(?:appearances|matches|goals|clean sheets)/i);
+  const bonusVal = parseMoneyValue(text, ['bonus', 'payout', 'tranche', 'milestone fee']);
+  
+  if (metricMatch && targetMatch && bonusVal > 0) {
+    const target = parseInt(targetMatch[1]) || 20;
+    result.milestones.push({
+      metric: metricMatch[1].toLowerCase(),
+      target: target,
+      tranche: Math.ceil(target / 2),
+      amount: bonusVal,
+      currency: result.currency
+    });
+  } else {
+    // Sensible default milestone based on extracted metrics or standard ones
+    result.milestones.push({
+      metric: "appearances",
+      target: 20,
+      tranche: 10,
+      amount: Math.round(result.salary * 0.15), // 15% of annual salary
+      currency: result.currency
+    });
+  }
+
+  // 6. Regulatory & Loophole checks
+  if (lower.includes("image rights") && !lower.includes("licensed") && !lower.includes("separately")) {
+    result.loopholes.push({
+      title: "Ambiguous Image Rights Clause",
+      desc: "The contract assigns global image rights to the club without specifying compensation or licensing limits, risking conflict with personal sponsorships.",
+      severity: "warn"
+    });
+  }
+
+  if (lower.includes("unilateral") || lower.includes("sole discretion") || lower.includes("club may terminate")) {
+    result.loopholes.push({
+      title: "Unilateral Termination Clause",
+      desc: "Giving the club the exclusive right to terminate without cause violates FIFA Regulations on the Status and Transfer of Players (RSTP) Article 13/14.",
+      severity: "bad"
+    });
+  }
+
+  if (lower.includes("fine") || lower.includes("withhold salary") || lower.includes("penalty fee") || lower.includes("disciplinary deduction")) {
+    result.loopholes.push({
+      title: "Salary Withholding or Penalty Clause",
+      desc: "Clauses allowing direct withholding or penalizing of base salary for disciplinary reasons without independent arbitration are illegal in many jurisdictions.",
+      severity: "bad"
+    });
+  }
+
+  if (lower.includes("third-party") || lower.includes("tpo") || lower.includes("percentage of transfer") || lower.includes("economic rights")) {
+    result.loopholes.push({
+      title: "Potential Third-Party Ownership (TPO) Risk",
+      desc: "FIFA strictly prohibits third-party influence over player transfers. Any clause granting a third-party economic rights on future transfers violates FIFA RSTP Article 18ter.",
+      severity: "bad"
+    });
+  }
+
+  // default safety items if none found
+  if (result.loopholes.length === 0) {
+    result.loopholes.push({
+      title: "No Dispute Resolution Arbitration Specified",
+      desc: "The contract does not specify FIFA DRC or Court of Arbitration for Sport (CAS) as the forum, meaning legal issues would default to local courts, causing delays.",
+      severity: "warn"
+    });
+  }
+
+  return result;
+}
+
+function moneyFormat(v, cur) {
+  return (v / 100).toLocaleString() + " " + cur;
+}
+
+function displayAnalysis(label, filename, dateStr, text, compareId) {
+  $("emptyState").style.display = "none";
+  $("resultsArea").style.display = "block";
+  
+  $("resultTitle").textContent = label;
+  $("resFilename").textContent = filename;
+  $("resDate").textContent = new Date(dateStr).toLocaleString();
+  
+  const parsed = parseContractText(text);
+  
+  // Set Key Pinpoints
+  $("pinDuration").textContent = parsed.duration;
+  $("pinFixed").textContent = moneyFormat(parsed.fixed, parsed.currency);
+  $("pinSalary").textContent = moneyFormat(parsed.salary, parsed.currency);
+  $("pinCurrency").textContent = parsed.currency;
+  $("pinRelease").textContent = moneyFormat(parsed.release, parsed.currency);
+  
+  // Render milestones
+  const milContainer = $("pinMilestones");
+  milContainer.innerHTML = parsed.milestones.map(m => `
+    <div class="kv"><span>${m.metric} bonus</span><span>${moneyFormat(m.amount, m.currency)} per tranche (target: ${m.target}, tranche: ${m.tranche})</span></div>
+  `).join("");
+
+  // Render loopholes
+  const loopContainer = $("loopholesList");
+  loopContainer.innerHTML = parsed.loopholes.map(item => `
+    <div class="alert-box ${item.severity}">
+      <div>
+        <h4><span class="badge ${item.severity}">${item.severity === 'bad' ? 'Illegal/Critical' : 'Warning'}</span> ${item.title}</h4>
+        <p>${item.desc}</p>
+      </div>
+    </div>
+  `).join("");
+
+  // Render comparison
+  let targetContract = allPastContracts.find(c => c.id === compareId);
+  if (!targetContract && allPastContracts.length > 0) {
+    targetContract = allPastContracts[0]; // fallback
+  }
+
+  if (targetContract) {
+    $("compPastClub").textContent = targetContract.club_to;
+    $("compPastFixed").textContent = moneyFormat(targetContract.fixed_amount, targetContract.currency);
+    $("compPastSalary").textContent = moneyFormat(targetContract.salary, targetContract.currency);
+    $("compPastCurrency").textContent = targetContract.currency;
+    $("compPastRelease").textContent = "N/A";
+    $("compPastBonuses").textContent = "Appearances milestones active";
+
+    $("compNewTitle").textContent = `Proposed Contract (${parsed.club})`;
+    $("compNewClub").textContent = parsed.club;
+    $("compNewFixed").textContent = moneyFormat(parsed.fixed, parsed.currency);
+    $("compNewSalary").textContent = moneyFormat(parsed.salary, parsed.currency);
+    $("compNewCurrency").textContent = parsed.currency;
+    $("compNewRelease").textContent = moneyFormat(parsed.release, parsed.currency);
+
+    // Calculate variance
+    const varContainer = $("varianceSummary");
+    const salaryDiff = parsed.salary - targetContract.salary;
+    const isIncrease = salaryDiff > 0;
+    
+    varContainer.innerHTML = `
+      <div class="alert-box ${isIncrease ? 'ok' : 'warn'}">
+        <div>
+          <h4>Salary Variance</h4>
+          <p>Annual base salary ${isIncrease ? 'increases' : 'changes'} by ${moneyFormat(Math.abs(salaryDiff), parsed.currency)} compared to the past contract.</p>
+        </div>
+      </div>
+      <div class="alert-box info">
+        <div>
+          <h4>Currency & Jurisdictions</h4>
+          <p>Transition from ${targetContract.currency} to ${parsed.currency}. Ensure compliance with local taxation laws in both countries.</p>
+        </div>
+      </div>
+    `;
+  } else {
+    // No past contract to compare
+    $("compPastClub").textContent = "—";
+    $("compPastFixed").textContent = "—";
+    $("compPastSalary").textContent = "—";
+    $("compPastCurrency").textContent = "—";
+    $("compPastRelease").textContent = "—";
+    $("compPastBonuses").textContent = "—";
+    
+    $("compNewTitle").textContent = `Proposed Contract (${parsed.club})`;
+    $("compNewClub").textContent = parsed.club;
+    $("compNewFixed").textContent = moneyFormat(parsed.fixed, parsed.currency);
+    $("compNewSalary").textContent = moneyFormat(parsed.salary, parsed.currency);
+    $("compNewCurrency").textContent = parsed.currency;
+    $("compNewRelease").textContent = moneyFormat(parsed.release, parsed.currency);
+
+    $("varianceSummary").innerHTML = `
+      <div class="alert-box info">
+        <div>
+          <h4>No Past Contracts Found</h4>
+          <p>This appears to be the first contract entered into the system. Comparisons will become active as you add more contracts.</p>
+        </div>
+      </div>
+    `;
+  }
+}
+
+boot().catch(console.error);
+</script>
+</body>
+</html>

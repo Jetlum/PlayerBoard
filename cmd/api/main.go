@@ -105,6 +105,7 @@ func run() error {
 	// Wiring.
 	selfURL := "http://127.0.0.1:" + cfg.Port
 	contractH := contract.NewHandler(contract.NewService(contract.NewRepo(pool)))
+	contractDocH := contract.NewDocHandler(pool)
 	milestoneH := milestone.NewReadHandler(pool)
 	ingestH := ingest.NewHandler(pool, verifier)
 	wsH := realtime.NewHandler(hub)
@@ -139,6 +140,7 @@ func run() error {
 			r.Use(auth.Middleware(cfg.JWTSecret))
 			r.Route("/me", func(r chi.Router) {
 				contractH.Routes(r)
+				contractDocH.Routes(r)
 				milestoneH.Routes(r)
 				r.Get("/stream", wsH.Stream)
 			})

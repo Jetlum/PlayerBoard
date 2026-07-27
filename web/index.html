@@ -67,6 +67,9 @@
   <section class="card">
     <h2>Contract</h2>
     <div id="contract"><div class="kv"><span>loading…</span><span></span></div></div>
+    <div style="margin-top: 14px; text-align: right;">
+      <a id="analysisLink" href="/analysis.html" style="color:var(--accent); font-size:13px; font-weight:600; text-decoration:none;">📄 Analyze & Compare Contract ▶</a>
+    </div>
   </section>
 
   <section class="card wide">
@@ -120,6 +123,7 @@ async function boot() {
   $("who").innerHTML = `<span>athlete_id</span><span>${t.athlete_id}</span>`;
   $("role").textContent = t.role;
   $("clubLink").href = "/club.html";
+  $("analysisLink").href = "/analysis.html?athlete_id=" + encodeURIComponent(athleteId);
   await refresh();
   await loadHistory();
   connectWS();
